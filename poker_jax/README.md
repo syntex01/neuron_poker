@@ -12,7 +12,14 @@ pip install -U "jax[cuda12]"                       # NVIDIA GPU (e.g. RTX 3070)
 
 python -m pytest poker_jax/tests -q
 python -m poker_jax.benchmark 8192 32768
+python -m poker_jax.train                # or: train <updates> <batch> <horizon>
 ```
+
+`train.py` runs self-play Trinal-Clip PPO (AlphaHoldem-style) with one shared
+network on all six seats, prints bb/100 vs an always-call bot and vs the
+previous snapshot every 25 updates, and pickles checkpoints to
+`poker_jax/ckpt/`. On a GPU raise the defaults, e.g.
+`python -m poker_jax.train 5000 4096 128`.
 
 API: `init(key, button) -> State`, `step(state, action) -> State`,
 `legal_action_mask(state)`, `step_autoreset(state, action)` for training
