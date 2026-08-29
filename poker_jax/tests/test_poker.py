@@ -223,3 +223,32 @@ def test_batched_autoreset_conservation():
         assert (np.asarray(states.stacks) >= 0).all()
         finished += int(np.asarray(terminal).sum())
     assert finished > batch  # every env cycles through many hands
+
+
+# ----------------------------------------------------------------- training
+
+
+def test_training_smoke():
+    from poker_jax import model, train
+
+    params = model.net_init(jax.random.PRNGKey(0), hidden=(32,))
+    opt = model.adam_init(params)
+    states = jax.vmap(pj.init, in_axes=(0, None))(
+        jax.random.split(jax.random.PRNGKey(1), 8), 0
+    )
+    states, batch = train.rollout(params, states, jax.random.PRNGKey(2), 64)
+    assert batch["obs"].shape == (512, model.OBS_DIM)
+    assert bool(batch["w"].any())  # some hands finished inside the horizon
+    # returns are only nonzero on transitions credited to a finished hand
+    assert bool(jnp.all((batch["ret"] == 0) | batch["w"]))
+    new_params, opt, stats = train.update(params, opt, batch)
+    assert bool(jnp.isfinite(stats).all())
+    changed = jax.tree_util.tree_map(
+        lambda a, b: bool((a != b).any()), params, new_params
+    )
+    assert any(jax.tree_util.tree_leaves(changed))
+    bb = train.evaluate(
+        train.policy(params), train.CALLER, jax.random.PRNGKey(3),
+        batch=16, min_hands=200,
+    )
+    assert -10000 < bb < 10000
